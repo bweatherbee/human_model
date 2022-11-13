@@ -1,1 +1,7 @@
 This folder contains the scripts used to process data following output from CellRanger ARC pipeline.
+
+Analysis was performed largely using Seurat and Signac in R, within the RStudio IDE. 
+
+Velocity inference was performed using multivelo in python on a Linux virtual machine (script 5.2). Other packages were used in R, within in RStudio IDE.
+
+Plots in RStudio were saved through the plotviewer panel as PDF files, and final figures assembled using Adobe Illustrator.
