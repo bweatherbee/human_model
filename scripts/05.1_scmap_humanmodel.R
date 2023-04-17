@@ -479,3 +479,236 @@ DimPlot(human_model, reduction='wnn.umap')
 human_model$cell_assignment<-Idents(human_model)
 
 saveRDS(human_model, 'human_model.rds')
+
+##### SCMAP for in vitro models #####
+
+### Pham et al., 2022 ###
+count_matrix <- read.csv("human_model_analysis/log_reg/Pham/count_matrix.csv", row.names = 1)
+annotation <- read.csv("human_model_analysis/log_reg/Pham/annotation.csv", sep=';', row.names = 1)
+
+Pham <- SingleCellExperiment(assays = list(normcounts = count_matrix), colData = annotation)
+logcounts(Pham) <- log2(normcounts(Pham) + 1)
+rowData(Pham)$feature_symbol <- rownames(Pham)
+Pham <- Pham[!duplicated(rownames(Pham)), ]
+Pham
+
+human_model <- readRDS("D:/human_model/human_model_complete.rds")
+DefaultAssay(human_model)<-'RNA'
+human_model[['peaks']]<-NULL
+human_model[['ATAC']]<-NULL
+human_model[['chromvar']]<-NULL
+human_model[['GeneActivity']]<-NULL
+human_model[['SCT']]<-NULL
+human_model<-as.SingleCellExperiment(human_model)
+rowData(human_model)$feature_symbol <- rownames(human_model)
+
+Pham <- selectFeatures(Pham, n_features=500, suppress_plot = FALSE)
+table(rowData(Pham)$scmap_features)
+Pham <- indexCluster(Pham, cluster_col='Cell.type')
+head(metadata(Pham)$scmap_cluster_index)
+heatmap(as.matrix(metadata(Pham)$scmap_cluster_index))
+
+
+#Testing within Pham Dataset
+set.seed(123)
+Pham <- indexCell(Pham)
+names(metadata(Pham)$scmap_cell_index)
+length(metadata(Pham)$scmap_cell_index$subcentroids)
+dim(metadata(Pham)$scmap_cell_index$subcentroids[[1]])
+metadata(Pham)$scmap_cell_index$subcentroids[[1]][,1:5]
+dim(metadata(Pham)$scmap_cell_index$subclusters)
+metadata(Pham)$scmap_cell_index$subclusters[1:5,1:5]
+
+scmapCell_results <- scmapCell(
+  human_model,
+  w = 10,
+  list(
+    Pham = metadata(Pham)$scmap_cell_index
+  )
+)
+
+names(scmapCell_results)
+scmapCell_results$Pham$cells[,1:3]
+scmapCell_results$Pham$similarities[,1:3]
+
+scmapCell_clusters <- scmapCell2Cluster(
+  scmapCell_results,
+  w=2,
+  threshold=0.25,
+  list(
+    as.character(colData(Pham)$Cell.type)
+  )
+)
+head(scmapCell_clusters$scmap_cluster_labs)
+head(scmapCell_clusters$scmap_cluster_siml)
+
+plot<-
+  getSankey(
+    colData(human_model)$sample_type, 
+    scmapCell_clusters$scmap_cluster_labs[,"Pham"],
+    plot_height = 400,
+    colors=c('#3944BC', '#710193', '#ED7014')
+  )
+
+print(plot, file='D:/human_model/human_model_analysis/scmap_humanmodel/gvis_sankey_Pham_scmapCELL.html')
+
+scmap_Pham<-scmapCell_results$combined_labs
+scmap_Pham<-as.data.frame(scmap_Pham)
+rownames(scmap_Pham)<-human_model@colData@rownames
+
+saveRDS(scmap_Pham,'./human_model_analysis/scmap_humanmodel/scmap_Pham_results.rds')
+saveRDS(scmapCell_results, './human_model_analysis/scmap_humanmodel/scmap_Pham_CELL.rds')
+
+### Kagawa et al., 2021 ###
+library(tidyverse)
+counts <- readRDS("D:/human_model/human_model_analysis/log_reg/Kagawa/counts.RDS")
+rownames(counts)<-make.unique(gsub(".*-","", counts[,1]))
+counts<-counts[,2:2716]
+metadata<-as.data.frame(read_tsv('./human_model_analysis/log_reg/Kagawa/metadata.tsv'))
+rownames(metadata)<-metadata$sampleid
+metadata_0<-subset(metadata, metadata$blastoid.Fig2b.lowres=='0')
+metadata_0<-subset(metadata_0, metadata_0$treatment!='PXGL')
+metadata_1<-subset(metadata, metadata$blastoid.Fig2b.lowres=='1')
+metadata_3<-subset(metadata, metadata$blastoid.Fig2b.lowres=='3')
+
+blastoid_metadata<-rbind(metadata_0, metadata_1, metadata_3)
+counts<-as.data.frame(counts)
+blastoid_counts<-counts[,rownames(blastoid_metadata)]
+
+Kagawa <- SingleCellExperiment(assays = list(normcounts = blastoid_counts), colData = blastoid_metadata)
+logcounts(Kagawa) <- log2(normcounts(Kagawa) + 1)
+rowData(Kagawa)$feature_symbol <- rownames(Kagawa)
+Kagawa <- Kagawa[!duplicated(rownames(Kagawa)), ]
+Kagawa
+
+human_model <- readRDS("D:/human_model/human_model_complete.rds")
+DefaultAssay(human_model)<-'RNA'
+human_model[['peaks']]<-NULL
+human_model[['ATAC']]<-NULL
+human_model[['chromvar']]<-NULL
+human_model[['GeneActivity']]<-NULL
+human_model[['SCT']]<-NULL
+human_model<-as.SingleCellExperiment(human_model)
+rowData(human_model)$feature_symbol <- rownames(human_model)
+
+Kagawa <- selectFeatures(Kagawa, n_features=500, suppress_plot = FALSE)
+table(rowData(Kagawa)$scmap_features)
+Kagawa <- indexCluster(Kagawa, cluster_col='blastoid.Fig2b.lowres')
+head(metadata(Kagawa)$scmap_cluster_index)
+heatmap(as.matrix(metadata(Kagawa)$scmap_cluster_index))
+
+
+#Testing within Kagawa Dataset
+scmapCluster_results <- scmapCluster(
+  projection = human_model,
+  threshold  = 0.5,
+  index_list = list(
+    Kagawa = metadata(Kagawa)$scmap_cluster_index
+  )
+)
+
+plot<-
+  getSankey(
+    colData(human_model)$sample_type, 
+    scmapCluster_results$scmap_cluster_labs[,'Kagawa'],
+    plot_height = 400,
+    colors=c('#3944BC', '#710193', '#ED7014')
+  )
+
+print(plot, file='D:/human_model/human_model_analysis/scmap_humanmodel/gvis_sankey_Kagawa_scmapclusters.html')
+
+saveRDS(scmapCluster_results, './human_model_analysis/scmap_humanmodel/scmap_cluster_results_Kagawa.rds')
+
+scmap_Kagawa<-scmapCluster_results$combined_labs
+scmap_Kagawa<-as.data.frame(scmap_Kagawa)
+rownames(scmap_Kagawa)<-human_model@colData@rownames
+
+saveRDS(scmap_Kagawa,'./human_model_analysis/scmap_humanmodel/scmap_Kagawa_results.rds')
+
+
+### Zheng et al., 2019 ###
+PASE <- readRDS("D:/human_model/human_model_analysis/log_reg/Zheng/GSE134571_Posterior48h_H9_Amnion_Merged.rds")
+
+new.cluster.ids<-c("hESCs", "Transwell-AMLC", "AMLC", "hPGCLC", "MeLC1", "MeLC2")
+names(new.cluster.ids)<-levels(PASE)
+PASE<-RenameIdents(PASE, new.cluster.ids)
+
+PASE$cell_assignment<-Idents(PASE)
+PASE<-NormalizeData(PASE)
+PASE<-ScaleData(PASE)
+
+PASE<-as.SingleCellExperiment(PASE)
+rowData(PASE)$feature_symbol <- rownames(PASE)
+PASE <- selectFeatures(PASE, n_features=500, suppress_plot = FALSE)
+table(rowData(PASE)$scmap_features)
+PASE <- indexCluster(PASE, cluster_col='cell_assignment')
+head(metadata(PASE)$scmap_cluster_index)
+heatmap(as.matrix(metadata(PASE)$scmap_cluster_index))
+
+
+#Testing within PASE Dataset
+
+set.seed(123)
+PASE <- indexCell(PASE)
+names(metadata(PASE)$scmap_cell_index)
+length(metadata(PASE)$scmap_cell_index$subcentroids)
+dim(metadata(PASE)$scmap_cell_index$subcentroids[[1]])
+metadata(PASE)$scmap_cell_index$subcentroids[[1]][,1:5]
+dim(metadata(PASE)$scmap_cell_index$subclusters)
+metadata(PASE)$scmap_cell_index$subclusters[1:5,1:5]
+
+scmapCell_results <- scmapCell(
+  human_model,
+  w = 10,
+  list(
+    PASE = metadata(PASE)$scmap_cell_index
+  )
+)
+
+names(scmapCell_results)
+scmapCell_results$PASE$cells[,1:3]
+scmapCell_results$PASE$similarities[,1:3]
+
+scmapCell_clusters <- scmapCell2Cluster(
+  scmapCell_results,
+  w=2,
+  threshold=0.25,
+  list(
+    as.character(colData(PASE)$cell_assignment)
+  )
+)
+head(scmapCell_clusters$scmap_cluster_labs)
+head(scmapCell_clusters$scmap_cluster_siml)
+
+plot<-
+  getSankey(
+    colData(human_model)$sample_type, 
+    scmapCell_clusters$scmap_cluster_labs[,"PASE"],
+    plot_height = 400,
+    colors=c('#3944BC', '#710193', '#ED7014')
+  )
+
+print(plot, file='D:/human_model/human_model_analysis/scmap_humanmodel/gvis_sankey_PASE_scmapCELL.html')
+
+scmap_PASE<-scmapCell_results$combined_labs
+scmap_PASE<-as.data.frame(scmap_PASE)
+rownames(scmap_PASE)<-human_model@colData@rownames
+
+saveRDS(scmap_PASE,'./human_model_analysis/scmap_humanmodel/scmap_PASE_results.rds')
+saveRDS(scmapCell_results, './human_model_analysis/scmap_humanmodel/scmap_PASE_CELL.rds')
+
+
+##### Adding in vitro model scmap info to human model object and plotting #####
+
+scmap_Kagawa_results <- readRDS("D:/human_model/human_model_analysis/scmap_humanmodel/scmap_Kagawa_results.rds")
+scmap_PASE_results <- readRDS("D:/human_model/human_model_analysis/scmap_humanmodel/scmap_PASE_results.rds")
+scmap_Pham_results <- readRDS("D:/human_model/human_model_analysis/scmap_humanmodel/scmap_Pham_results.rds")
+human_model <- readRDS("D:/human_model/human_model.rds")
+
+human_model<-AddMetaData(human_model, scmap_Kagawa_results)
+human_model<-AddMetaData(human_model, scmap_PASE_results)
+human_model<-AddMetaData(human_model, scmap_Pham_results)
+
+DimPlot(human_model, group.by=c('scmap_Kagawa', 'scmapCELL_PASE', 'scmapCELL_Pham'),
+        reduction='wnn.umap')
+saveRDS(human_model, 'human_model.rds')
